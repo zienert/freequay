@@ -6,7 +6,7 @@ Freequay.app contains the parts below, in `Contents/SharedSupport/freequay`. Eac
 
 | Part | Version | License | Texts |
 |---|---|---|---|
-| Wine with CodeWeavers' patches and Freequay's patches `0001` to `0008` | 11.0, from CrossOver 26.3.0 | LGPL-2.1-or-later | `wine/` |
+| Wine with CodeWeavers' patches and Freequay's patches `0001` to `0010` | 11.0, from CrossOver 26.3.0 | LGPL-2.1-or-later | `wine/` |
 | Libraries Wine builds in: Capstone, compiler-rt, FAudio, FluidSynth, GSM, libjpeg, jxrlib, Little CMS, OpenLDAP, mpg123, musl, libpng, LibTIFF, LibTomCrypt, vkd3d, libxml2, libxslt, zlib | as in the Wine sources | their own: LGPL-2.1 (FluidSynth, mpg123, vkd3d), BSD, MIT, zlib and similar permissive licenses | `wine/libs/<name>/` |
 | GnuTLS, with the libtasn1 and libunistring it includes | 3.8.3 | LGPL-2.1-or-later; libunistring LGPL-3.0-or-later or GPL-2.0-or-later | `gnutls/`, texts of version 3 in `gmp/` |
 | GMP | 6.3.0 | LGPL-3.0-or-later or GPL-2.0-or-later | `gmp/` |
