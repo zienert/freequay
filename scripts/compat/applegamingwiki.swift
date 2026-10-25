@@ -31,7 +31,7 @@
 import Foundation
 
 let api = "https://www.applegamingwiki.com/w/api.php"
-let agent = "Freequay (+https://github.com/loewenmaehne/freequay; non-commercial; one request per second)"
+let agent = "Freequay (+https://github.com/zienert/freequay; non-commercial; one request per second)"
 
 // MARK: Python's re on NSRegularExpression
 
