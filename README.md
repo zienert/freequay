@@ -8,7 +8,7 @@ Freequay runs Windows games and programs on Apple Silicon Macs, for free: Wine b
 
 You need an Apple Silicon Mac with macOS 14 or newer, Rosetta 2 and about 1.5 GB of free disk space; Steam takes another 1.5 GB, plus your games. Neither Xcode, its Command Line Tools nor Homebrew are needed. Most Macs got Rosetta 2 with the first Intel app they opened; otherwise run `softwareupdate --install-rosetta` once in Terminal.
 
-1. Download `Freequay-0.4.1.dmg` from the [latest release](https://github.com/loewenmaehne/freequay/releases/latest) and open it.
+1. Download `Freequay-0.4.1.dmg` from the [latest release](https://github.com/zienert/freequay/releases/latest) and open it.
 2. Drag Freequay into Applications and open it there. The first time, macOS refuses it because the app is not notarized by Apple: open System Settings, Privacy & Security, click Open Anyway next to the note about Freequay and confirm. After that it opens normally.
 3. The app lists once which servers Freequay downloads from. Then click Create a bottle, a Windows drive of its own (about a minute, with the download of Wine Mono), and install Steam with its button, or drop the installer of a Windows program on the window.
 
@@ -52,7 +52,7 @@ Everything else, such as the graphics per program, is done in Terminal with `fre
 
 ```bash
 cd ~
-curl -LO https://github.com/loewenmaehne/freequay/releases/download/v0.4.1/Freequay-0.4.1.dmg
+curl -LO https://github.com/zienert/freequay/releases/download/v0.4.1/Freequay-0.4.1.dmg
 hdiutil attach -nobrowse -mountpoint /tmp/freequay Freequay-0.4.1.dmg
 cp -R /tmp/freequay/Freequay.app /Applications/
 hdiutil detach /tmp/freequay
