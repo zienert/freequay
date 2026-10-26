@@ -1,0 +1,71 @@
+name: Game report
+description: "Tell us how a game or program ran in Freequay, or that it did not."
+title: "Game: "
+labels: ["game-report"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Reports of games that run help as much as reports of games that do not. They go into the table "What runs" in the README and into the rules per game.
+
+        Freequay is free and comes without support, so a report may stay unanswered and a fix is not promised.
+
+        This page is public. Logs can contain your user name and the names of your folders, so remove them before you paste anything.
+  - type: input
+    id: game
+    attributes:
+      label: Game or program
+      description: "Its name, and for a Steam game its app ID: the number in the address of its store page."
+      placeholder: "Alien Swarm, Steam app 630"
+    validations:
+      required: true
+  - type: dropdown
+    id: result
+    attributes:
+      label: Result
+      options:
+        - Runs well
+        - Runs, but needed settings
+        - Starts, but has problems
+        - Does not start
+        - Crashes later
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Freequay version
+      description: "The number in the file name of the disk image you downloaded."
+      placeholder: "0.4.1"
+    validations:
+      required: true
+  - type: input
+    id: mac
+    attributes:
+      label: Mac and macOS
+      description: "The chip or model and the macOS version, from the Apple menu, About This Mac."
+      placeholder: "MacBook Air M1, macOS 27.0.1"
+    validations:
+      required: true
+  - type: dropdown
+    id: graphics
+    attributes:
+      label: Graphics
+      description: "The backend the game used, if you know. Freequay picks one itself unless a rule or a setting says otherwise."
+      options:
+        - I don't know
+        - D3DMetal
+        - DXMT
+        - DXVK
+        - wined3d
+  - type: textarea
+    id: details
+    attributes:
+      label: What happened, and what did you try?
+      description: "What you saw, and anything that changed it. If a setting or a rule made the game run, give the line, for example the one you passed to `freequay rule`."
+  - type: textarea
+    id: log
+    attributes:
+      label: Message or log
+      description: "The message in the Freequay window, for example \"stopped right away (exit code 5)\", or the end of the output of `freequay run --debug`."
+      render: text

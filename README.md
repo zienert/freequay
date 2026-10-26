@@ -3,7 +3,7 @@
 Freequay runs Windows games and programs on Apple Silicon Macs, for free: Wine built from the open source part of CodeWeavers' CrossOver 26.3.0, with a small app and settings per game from open sources. It is not affiliated with CodeWeavers or Apple.
 
 > [!WARNING]
-> **Experimental.** Freequay has been tested on one Mac so far, a MacBook Air M1 with macOS 27.0.1, and not on an older macOS. Small games mostly run. Large or older games often need settings per game, some do not run yet, and games with anti-cheat usually do not start. [What runs](#what-runs) lists what was tried.
+> **Experimental.** Freequay has been tested on one Mac so far, a MacBook Air M1 with macOS 27.0.1, and not on an older macOS. Small games mostly run. Large or older games often need settings per game, some do not run yet, and games with anti-cheat usually do not start. [What runs](#what-runs) lists what was tried. Did a game run, or not? [Report it](https://github.com/zienert/freequay/issues/new?template=game-report.yml).
 
 <img src="app/screenshot.png" width="660" alt="Freequay.app with the bottle games: Steam and Notepad in the list, below it a strip to drop installers on">
 
@@ -23,7 +23,7 @@ Everything Freequay needs is inside the app. What it downloads later, your bottl
 
 ## What runs
 
-Tested on a MacBook Air M1 with 16 GB and macOS 27.0.1, not yet on an older macOS or another Mac. Small free games mostly run; large or older games often need settings per game. Reports are welcome as issues.
+Tested on a MacBook Air M1 with 16 GB and macOS 27.0.1, not yet on an older macOS or another Mac. Small free games mostly run; large or older games often need settings per game. Reports are welcome as [game reports](https://github.com/zienert/freequay/issues/new?template=game-report.yml), also of games that run.
 
 | Program | Result |
 |---|---|
@@ -249,7 +249,16 @@ The disk image with GStreamer was tested like 0.3.1's: the app copied out of it,
 
 ## Folders
 
-`downloads/` source packages, `sources/` unpacked and patched sources, `build/` build trees, `deps/` x86_64 libraries, `dist/` the finished build with its backends, `out/` release disk images, `tools/` meson, `logs/` logs, `Freequay.app` the app built from `app/`, `scripts/compat/applegamingwiki`, `fix` and `cabextract` the programs built from the `.swift` files next to them. Only `app/`, `scripts/`, `patches/`, `compat/`, `tests/`, `licenses/` and the documents are versioned.
+`downloads/` source packages, `sources/` unpacked and patched sources, `build/` build trees, `deps/` x86_64 libraries, `dist/` the finished build with its backends, `out/` release disk images, `tools/` meson, `logs/` logs, `Freequay.app` the app built from `app/`, `scripts/compat/applegamingwiki`, `fix` and `cabextract` the programs built from the `.swift` files next to them. Only `app/`, `scripts/`, `patches/`, `compat/`, `tests/`, `licenses/`, `.github/` (the issue forms) and the documents are versioned.
+
+## Reports and help
+
+- A game that runs or does not run: [game report](https://github.com/zienert/freequay/issues/new?template=game-report.yml).
+- A bug in Freequay itself: [bug report](https://github.com/zienert/freequay/issues/new?template=bug.yml).
+- A security problem: in private, see [SECURITY.md](SECURITY.md).
+- Rules for games and changes to the code: see [CONTRIBUTING.md](CONTRIBUTING.md).
+
+There is no support: a report may stay unanswered, and a fix is not promised.
 
 ## License
 
