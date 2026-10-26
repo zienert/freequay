@@ -1,0 +1,47 @@
+name: Bug in Freequay
+description: "Something in Freequay itself does not work: the app, the freequay command or the installation."
+title: "Bug: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For a game that does not run, use the game report. This form is for Freequay itself, for example when the app crashes, a bottle cannot be created or a command gives an error.
+
+        Freequay is free and comes without support, so a report may stay unanswered and a fix is not promised.
+
+        This page is public. Logs can contain your user name and the names of your folders, so remove them before you paste anything. Do not post a security problem here: use the Security tab of the repository and report it in private.
+  - type: input
+    id: version
+    attributes:
+      label: Freequay version
+      description: "The number in the file name of the disk image you downloaded."
+      placeholder: "0.4.1"
+    validations:
+      required: true
+  - type: input
+    id: mac
+    attributes:
+      label: Mac and macOS
+      description: "The chip or model and the macOS version, from the Apple menu, About This Mac."
+      placeholder: "MacBook Air M1, macOS 27.0.1"
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: "What you did, what you expected and what you got instead."
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: How can it be repeated?
+      description: "The steps, if you know them, and the game or program that was involved."
+  - type: textarea
+    id: log
+    attributes:
+      label: Message or log
+      description: "The message in the Freequay window or the output of the command."
+      render: text
