@@ -1,12 +1,12 @@
 name: Game report
-description: "Tell us how a game or program ran in Freequay, or that it did not."
+description: "Tell us what happened when you started a game or program in Freequay."
 title: "Game: "
 labels: ["game-report"]
 body:
   - type: markdown
     attributes:
       value: |
-        Reports of games that run help as much as reports of games that do not. They go into the table "What runs" in the README and into the rules per game.
+        Describe what happened. The rating in the table "What runs" in the README comes from your answers and your Mac, so you do not have to judge how well it ran. Reports of games that run help as much as reports of games that do not.
 
         Freequay is free and comes without support, so a report may stay unanswered and a fix is not promised.
 
@@ -20,15 +20,47 @@ body:
     validations:
       required: true
   - type: dropdown
-    id: result
+    id: progress
     attributes:
-      label: Result
+      label: How far did you get?
       options:
-        - Runs well
-        - Runs, but needed settings
-        - Starts, but has problems
-        - Does not start
-        - Crashes later
+        - "It did not start"
+        - "A window or launcher opened, then it stopped"
+        - "It reached the main menu"
+        - "I played it"
+  - type: checkboxes
+    id: problems
+    attributes:
+      label: What did not work well?
+      description: "Tick everything that applies."
+      options:
+        - label: "It crashed"
+        - label: "Too slow, it stutters"
+        - label: "Graphics errors"
+        - label: "Sound problems"
+        - label: "Controller, keyboard or mouse problems"
+        - label: "Window or fullscreen problems"
+        - label: "Anti-cheat or a launcher blocked it"
+        - label: "Nothing, it ran fine"
+  - type: input
+    id: fps
+    attributes:
+      label: Frames per second
+      description: "If you know them, for example from the game's own counter or from `freequay run --hud`."
+      placeholder: "about 20 in a mission"
+  - type: dropdown
+    id: changes
+    attributes:
+      label: Did you change anything to make it run?
+      options:
+        - "No"
+        - "Yes, described below"
+  - type: input
+    id: mac
+    attributes:
+      label: Mac
+      description: "Model or chip, memory and macOS version, from the Apple menu, About This Mac."
+      placeholder: "MacBook Air M1, 16 GB, macOS 27.0.1"
     validations:
       required: true
   - type: input
@@ -39,30 +71,11 @@ body:
       placeholder: "0.4.1"
     validations:
       required: true
-  - type: input
-    id: mac
-    attributes:
-      label: Mac and macOS
-      description: "The chip or model and the macOS version, from the Apple menu, About This Mac."
-      placeholder: "MacBook Air M1, macOS 27.0.1"
-    validations:
-      required: true
-  - type: dropdown
-    id: graphics
-    attributes:
-      label: Graphics
-      description: "The backend the game used, if you know. Freequay picks one itself unless a rule or a setting says otherwise."
-      options:
-        - I don't know
-        - D3DMetal
-        - DXMT
-        - DXVK
-        - wined3d
   - type: textarea
     id: details
     attributes:
-      label: What happened, and what did you try?
-      description: "What you saw, and anything that changed it. If a setting or a rule made the game run, give the line, for example the one you passed to `freequay rule`."
+      label: What happened?
+      description: "What you saw. If a setting or a rule made the game run, give it, for example the line you passed to `freequay rule`."
   - type: textarea
     id: log
     attributes:
