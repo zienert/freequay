@@ -1,0 +1,21 @@
+# Games for tests/games.zsh: the Steam games tried in Freequay so far (README, What runs), so that every
+# release checks them again. One per line, fields separated by tabs: the Steam app ID (or a Windows
+# program, by its path in the bottle or on the Mac), the name, engine and graphics, and the arguments
+# for the game: a window of 1280×720 instead of fullscreen, for the engines that take them.
+630	Alien Swarm	Source, Direct3D 9, 32 bit	-windowed -w 1280 -h 720
+588430	Fallout Shelter	Unity, Direct3D 11	-screen-fullscreen 0 -screen-width 1280 -screen-height 720
+2709570	Supermarket Together	Unity, Direct3D 11	-screen-fullscreen 0 -screen-width 1280 -screen-height 720
+1677740	Stumble Guys	Unity, Direct3D 11	-screen-fullscreen 0 -screen-width 1280 -screen-height 720
+601510	Yu-Gi-Oh! Duel Links	Unity, Direct3D 11	-screen-fullscreen 0 -screen-width 1280 -screen-height 720
+1041320	Lords Mobile: Kingdom Wars	Unity, Direct3D 11	-screen-fullscreen 0 -screen-width 1280 -screen-height 720
+1258080	Shop Titans	Unity, Direct3D 11	-screen-fullscreen 0 -screen-width 1280 -screen-height 720
+329110	Gems of War	Unity, Direct3D 11	-screen-fullscreen 0 -screen-width 1280 -screen-height 720
+1201240	BLEACH Brave Souls	Unity, Direct3D 11	-screen-fullscreen 0 -screen-width 1280 -screen-height 720
+2918150	ONE PIECE Bounty Rush	Unity, Direct3D 11	-screen-fullscreen 0 -screen-width 1280 -screen-height 720
+1353300	Idle Slayer	Unity, Direct3D 11	-screen-fullscreen 0 -screen-width 1280 -screen-height 720
+1147690	NGU IDLE	Unity, Direct3D 11	-screen-fullscreen 0 -screen-width 1280 -screen-height 720
+1180660	Tell Me Why	Unreal Engine 4	-windowed -ResX=1280 -ResY=720
+1468260	Leaf Blower Revolution	GameMaker
+1476970	IdleOn	Electron
+937310	Infinitode 2	OpenGL
+440	Team Fortress 2	Source, Direct3D 9	-windowed -w 1280 -h 720
