@@ -1,0 +1,16 @@
+--- a/dlls/dsound/Makefile.in
++++ b/dlls/dsound/Makefile.in
+@@ -2,6 +2,13 @@
+ IMPORTLIB = dsound
+ IMPORTS   = dxguid uuid winmm ole32 advapi32 user32
+ 
++# freequay: the mixer resamples every playing sound in floating point. For 32-bit code gcc emits
++# x87 instructions by default, which Rosetta emulates slowly: the mixer of a 32-bit game needed a
++# whole core for a single 44.1 kHz sound on a 48 kHz device, so the sound of 32-bit games such as
++# GTA IV stuttered and fell behind. With SSE2, which Rosetta translates into native instructions,
++# it keeps up like the 64-bit mixer (tests/dsound-mix). For x86_64 both flags are the default.
++EXTRADEFS = -msse2 -mfpmath=sse
++
+ SOURCES = \
+ 	buffer.c \
+ 	capture.c \
