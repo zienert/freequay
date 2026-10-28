@@ -11,7 +11,7 @@ Freequay runs Windows games and programs on Apple Silicon Macs, for free: Wine b
 
 You need an Apple Silicon Mac with macOS 14 or newer, Rosetta 2 and about 1.5 GB of free disk space; Steam takes another 1.5 GB, plus your games. Neither Xcode, its Command Line Tools nor Homebrew are needed. Most Macs got Rosetta 2 with the first Intel app they opened; otherwise run `softwareupdate --install-rosetta` once in Terminal.
 
-1. Download `Freequay-0.4.1.dmg` from the [latest release](https://github.com/zienert/freequay/releases/latest) and open it.
+1. Download `Freequay-0.5.0.dmg` from the [latest release](https://github.com/zienert/freequay/releases/latest) and open it.
 2. Drag Freequay into Applications and open it there. The first time, macOS refuses it because the app is not notarized by Apple: open System Settings, Privacy & Security, click Open Anyway next to the note about Freequay and confirm. After that it opens normally.
 3. The app lists once which servers Freequay downloads from. Then click Create a bottle, a Windows drive of its own (about a minute, with the download of Wine Mono), and install Steam with its button, or drop the installer of a Windows program on the window.
 
@@ -34,7 +34,7 @@ Tested on a MacBook Air M1 with 16 GB and macOS 27.0.1, not yet on an older macO
 | Team Fortress 2 through Steam (Direct3D 9) | ran smoothly against bots, best in fullscreen, on the first build (2026-10-13); not tested since |
 | FINAL FANTASY XIV: Dawntrail Benchmark (Direct3D 11, .NET launcher) | runs through: 2679 points at 1920×1080 "High (Desktop)", 23 to 35 FPS in the foreground |
 | Rockstar Games Launcher with Social Club | installs, updates itself, signs in and opens its main window. Downloading a game stalls on a MacBook Air M1 (GTA IV, 2026-10-19): the launcher has its background service write every piece of a file, the service manages about five pieces a second under Rosetta, and the downloads time out. With two displays the launcher sometimes hangs at its start; started in a virtual desktop (`freequay wine <bottle> explorer /desktop=Rockstar,1600x900 "C:\Program Files\Rockstar Games\Launcher\Launcher.exe"`) it opens |
-| Grand Theft Auto IV through the Rockstar Games Launcher (Direct3D 9, 32 bit) | installed only with a workaround that is not part of Freequay (2026-10-20). Playable with wined3d and FusionFix, but at a low frame rate and with audio lag; with DXVK the picture shows black squares and the GPU crashes after some minutes. Work on the frame rate and the audio is not part of 0.4.1 |
+| Grand Theft Auto IV through the Rockstar Games Launcher (Direct3D 9, 32 bit) | installed only with a workaround that is not part of Freequay (2026-10-20). Playable with wined3d and FusionFix, but at a low frame rate and with audio lag; with DXVK the picture shows black squares and the GPU crashes after some minutes. 0.5.0 has what came out of it: the 32-bit part of Wine computes with SSE2, the OpenGL calls of 32-bit programs need fewer switches, and with DXVK a draw that reads its own render target reads a copy, which removed the squares in a short test. The GPU crash with DXVK is not solved, and frame rate and sound with 0.5.0 have not been measured in the game yet |
 | Black Myth: Wukong Benchmark Tool (Direct3D 12, D3DMetal) | hangs while loading, then Unreal's crash reporter comes up |
 | Totally Accurate Battlegrounds through Steam | does not start: the launcher of its Easy Anti-Cheat crashes (2026-10-19). Games with anti-cheat usually do not run |
 
@@ -61,8 +61,8 @@ Everything else, such as the graphics per program, is done in Terminal with `fre
 
 ```bash
 cd ~
-curl -LO https://github.com/zienert/freequay/releases/download/v0.4.1/Freequay-0.4.1.dmg
-hdiutil attach -nobrowse -mountpoint /tmp/freequay Freequay-0.4.1.dmg
+curl -LO https://github.com/zienert/freequay/releases/download/v0.5.0/Freequay-0.5.0.dmg
+hdiutil attach -nobrowse -mountpoint /tmp/freequay Freequay-0.5.0.dmg
 cp -R /tmp/freequay/Freequay.app /Applications/
 hdiutil detach /tmp/freequay
 alias freequay=/Applications/Freequay.app/Contents/SharedSupport/freequay/scripts/freequay
