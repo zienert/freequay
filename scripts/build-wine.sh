@@ -27,6 +27,12 @@ if [[ ! -f Makefile || "${1:-}" == reconfigure ]]; then
   # Without it ntdll uses pipe and fcntl.
   # GStreamer for winegstreamer (videos and sounds of Media Foundation and DirectShow) comes from
   # scripts/build-gstreamer.sh, found through pkg-config in deps/.
+  # i386_CFLAGS: the 32-bit Windows DLLs, the ones a 32-bit program loads, compute floating point
+  # with SSE2. For 32-bit code gcc writes x87 instructions by default, which Rosetta does not
+  # translate but emulates through slow runtime routines, while it translates SSE2 into native
+  # instructions. With x87, Wine's sound mixers, its Direct3D fixed-function pipeline and D3DX
+  # math were several times slower for 32-bit programs than for 64-bit ones (see Tests in the
+  # README). Every Mac with Rosetta or an Intel processor has SSE2; x86_64 code uses it anyway.
   "$SRC/configure" --prefix="$PREFIX" \
     --build=x86_64-apple-darwin --host=x86_64-apple-darwin \
     --enable-archs=i386,x86_64 --disable-tests \
@@ -39,7 +45,7 @@ if [[ ! -f Makefile || "${1:-}" == reconfigure ]]; then
     --without-pcap --without-pcsclite --without-pulse --without-sane --without-sdl \
     --without-udev --without-unwind --without-usb --without-v4l2 \
     CC="clang -arch x86_64" OBJC="clang -arch x86_64" \
-    CFLAGS="-O2" CROSSCFLAGS="-O2" \
+    CFLAGS="-O2" CROSSCFLAGS="-O2" i386_CFLAGS="-O2 -msse2 -mfpmath=sse" \
     LDFLAGS="-L$DEPS/lib -Wl,-headerpad_max_install_names" \
     FREETYPE_CFLAGS="-I$DEPS/include/freetype2" FREETYPE_LIBS="-L$DEPS/lib -lfreetype" \
     GNUTLS_CFLAGS="-I$DEPS/include" GNUTLS_LIBS="-L$DEPS/lib -lgnutls" \

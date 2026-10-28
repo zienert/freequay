@@ -1,0 +1,26 @@
+--- a/dlls/opengl32/unix_wgl.c
++++ b/dlls/opengl32/unix_wgl.c
+@@ -2637,13 +2637,21 @@
+ 
+         if (!(buffer = calloc( 1, sizeof(*buffer) ))) return NULL;
+         buffer->name = name ? name : get_target_name( teb, target );
+-        buffer->size = name ? get_named_buffer_param( teb, name, GL_BUFFER_SIZE ) : get_buffer_param( teb, target, GL_BUFFER_SIZE );
+         rb_put( &ctx->buffers->map, &buffer->name, &buffer->entry );
+         TRACE( "allocated buffer %p for %u\n", buffer, buffer->name );
+     }
+ 
+     buffer->host_ptr = ptr;
+-    if (!offset && !length) length = buffer->size;
++    /* freequay: the size is asked for only when a map of the whole buffer needs it. On the Mac,
++     * glGetBufferParameteriv waits for the driver, 50 us and more, and wined3d maps a new buffer
++     * for every discarding map of a dynamic buffer in a 32-bit program, so that wait was most of
++     * the time of these maps, which a 32-bit Direct3D 9 game makes several times a frame. */
++    if (!offset && !length)
++    {
++        if (!buffer->size)
++            buffer->size = name ? get_named_buffer_param( teb, name, GL_BUFFER_SIZE ) : get_buffer_param( teb, target, GL_BUFFER_SIZE );
++        length = buffer->size;
++    }
+     if (ULongToPtr(PtrToUlong(ptr)) == ptr) /* we're lucky */
+     {
+         buffer->map_ptr = ptr;

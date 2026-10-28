@@ -28,6 +28,10 @@ struct FreequayApp: App {
             CommandGroup(replacing: .newItem) {
                 Button("Open Program…") { delegate.model.choose() }.keyboardShortcut("o")
             }
+            CommandGroup(replacing: .help) {
+                Button("Report a Game…") { delegate.model.report(nil) }
+                Button("Report a Bug in Freequay…") { delegate.model.reportBug() }
+            }
         }
     }
 }
@@ -66,7 +70,10 @@ final class Model: ObservableObject {
         }
     }
     @Published var programs: [Program] = []
-    @Published var status = ""
+    @Published var status = "" {
+        didSet { failure = nil }  // the button for a report belongs to the message it came with
+    }
+    @Published var failure: Program?  // the program whose start the status reports as failed
     @Published var busy = false    // a bottle or Steam is being set up
     @Published var naming = false  // the sheet for a new bottle is open
     // the note on what Freequay downloads from where; until it was read, the launcher downloads nothing by itself
@@ -230,7 +237,7 @@ final class Model: ObservableObject {
                           Model.wineProcesses().subtracting(start.processes).isEmpty {
                     // it ended and left nothing new running: it failed, or it handed over to a copy that
                     // runs already, like a second Steam
-                    if start.code != 0 { return finish("\(start.name) stopped right away (exit code \(start.code)).") }
+                    if start.code != 0 { return finish("\(start.name) stopped right away (exit code \(start.code)).", failed: true) }
                     let apps = Set(Model.wineWindows().map(\.pid))
                     if apps.count == 1, let pid = apps.first {
                         _ = NSRunningApplication(processIdentifier: pid)?.activate(options: [.activateAllWindows])
@@ -239,19 +246,21 @@ final class Model: ObservableObject {
                     finish("\(start.name) is already running.")
                 } else if start.ended.map({ Date().timeIntervalSince($0) > 15 }) == true {
                     finish(start.code != 0 ? "\(start.name) stopped right away (exit code \(start.code))."
-                                           : "\(start.name) did not open a window.")
+                                           : "\(start.name) did not open a window.", failed: true)
                 } else if Date().timeIntervalSince(start.began) > 120 {
-                    finish("\(start.name) has not shown a window yet. It may still be starting.")
+                    finish("\(start.name) has not shown a window yet. It may still be starting.", failed: true)
                 }
             }
         }
     }
 
-    private func finish(_ message: String) {
+    private func finish(_ message: String, failed: Bool = false) {
+        let start = pending
         pending = nil
         starting = nil
         watch?.cancel()
         status = message
+        if failed, let start { failure = Program(name: start.name, target: start.target) }
     }
 
     private func wait() {
@@ -310,13 +319,33 @@ final class Model: ObservableObject {
             let error = code == 0 ? nil : Model.error(in: output)
             if pending?.target == target {
                 // without a message, the watch decides once it sees what the process left running
-                if let error { finish(error) } else { pending?.ended = Date(); pending?.code = code }
+                if let error { finish(error, failed: true) } else { pending?.ended = Date(); pending?.code = code }
             } else if let error {
                 status = error
+                failure = Program(name: name, target: target)
             } else if code != 0, Date().timeIntervalSince(started) < 15 {
                 status = "\(name) stopped right away (exit code \(code))."
+                failure = Program(name: name, target: target)
             }
         }
+    }
+
+    static let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown"
+
+    // Report on GitHub: the browser opens the form, filled in with the program, the Mac, this version
+    // and the message; only the user sends it. Without a program, an empty game report.
+    func reportAddress(_ program: Program?, message: String? = nil) -> URL {
+        let id = program.flatMap { $0.steamGame ? String($0.target.dropFirst("steam:".count)) : nil }
+        return Report.game(name: program?.name, steamID: id, message: message.map { Report.scrub($0) },
+                           version: Model.version, mac: Report.mac)
+    }
+
+    func report(_ program: Program?, message: String? = nil) {
+        NSWorkspace.shared.open(reportAddress(program, message: message))
+    }
+
+    func reportBug() {
+        NSWorkspace.shared.open(Report.bug(version: Model.version, mac: Report.mac))
     }
 
     func create(_ name: String) {
@@ -570,7 +599,16 @@ struct ContentView: View {
                 if model.busy || (model.starting != nil && !model.programs.contains { $0.target == model.starting }) {
                     ProgressView().controlSize(.small)
                 }
-                Text(model.status).font(.system(size: 12.5)).foregroundStyle(muted).fixedSize(horizontal: false, vertical: true)
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    Text(model.status).font(.system(size: 12.5)).foregroundStyle(muted).fixedSize(horizontal: false, vertical: true)
+                    // after a start that failed, a game report about it
+                    if let program = model.failure {
+                        Button("Report on GitHub…") { model.report(program, message: model.status) }
+                            .buttonStyle(Quiet(size: 12.5))
+                            .help("Opens a game report on GitHub in your browser, filled in with this message, the program, "
+                                  + "your Mac and the Freequay version. Nothing is sent until you submit it there.")
+                    }
+                }
             }
             .frame(minHeight: 18)
             .padding(.top, 18)
@@ -689,6 +727,7 @@ struct ContentView: View {
             if inside { hovered = program.id } else if hovered == program.id { hovered = nil }
         }
         .contextMenu {
+            Button("Report on GitHub…") { model.report(program) }
             Button("Remove from List") { model.remove(program) }
         }
     }

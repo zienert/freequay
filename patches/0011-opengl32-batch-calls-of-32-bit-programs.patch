@@ -1,0 +1,550 @@
+--- a/dlls/opengl32/private.h
++++ b/dlls/opengl32/private.h
+@@ -30,6 +30,52 @@
+ 
+ extern const void *extension_procs[];
+ 
++/* slot of the TEB's glReserved1 that holds the batch of the thread; wgl.c uses 2 to 5 for pixel formats */
++#define WINE_GL_RESERVED_BATCH 6
++
++#ifndef _WIN64
++
++/* freequay: the OpenGL calls a 32-bit thread collects before it switches to the Unix side (wgl.c) */
++struct opengl_batch
++{
++    UINT used;      /* bytes of entries in data */
++    BOOL busy;      /* the entries run: whatever is called meanwhile goes straight to the Unix side */
++    UINT64 data[(0x10000 - 8) / sizeof(UINT64)];
++};
++
++/* for each function that can be collected the size of its parameters; for glUniform*v and
++ * glUniformMatrix*fv also where its count and values are and the size of one element */
++struct batch_info
++{
++    USHORT size;
++    BYTE count_offset;
++    BYTE value_offset;
++    USHORT value_size;
++};
++
++extern const struct batch_info batch_info[funcs_count];
++extern BOOL batch_add( enum unix_funcs code, void *params );
++extern NTSTATUS batch_flush( enum unix_funcs code, void *params );
++
++static inline NTSTATUS opengl_unix_call( enum unix_funcs code, void *params )
++{
++    struct opengl_batch *batch;
++
++    if (batch_info[code].size && batch_add( code, params )) return STATUS_SUCCESS;
++    if ((batch = NtCurrentTeb()->glReserved1[WINE_GL_RESERVED_BATCH]) && batch->used)
++        return batch_flush( code, params );
++    return WINE_UNIX_CALL( code, params );
++}
++
++#else
++
++static inline NTSTATUS opengl_unix_call( enum unix_funcs code, void *params )
++{
++    return WINE_UNIX_CALL( code, params );
++}
++
++#endif
++
+ extern int WINAPI wglDescribePixelFormat( HDC hdc, int ipfd, UINT cjpfd, PIXELFORMATDESCRIPTOR *ppfd );
+ 
+ #endif /* __WINE_OPENGL32_PRIVATE_H */
+--- a/dlls/opengl32/unix_private.h
++++ b/dlls/opengl32/unix_private.h
+@@ -88,6 +88,7 @@
+ extern NTSTATUS thread_attach( void *args );
+ extern NTSTATUS process_detach( void *args );
+ extern NTSTATUS get_pixel_formats( void *args );
++extern NTSTATUS process_batch( void *args );
+ extern void set_context_attribute( TEB *teb, GLenum name, const void *value, size_t size );
+ extern void set_current_fbo( TEB *teb, GLenum target, GLuint framebuffer );
+ extern GLuint get_default_fbo( TEB *teb, GLenum target );
+--- a/dlls/opengl32/unix_thunks.c
++++ b/dlls/opengl32/unix_thunks.c
+@@ -33611,6 +33611,7 @@
+     ext_wglSetPbufferAttribARB,
+     ext_wglSetPixelFormatWINE,
+     ext_wglSwapIntervalEXT,
++    process_batch,
+ };
+ 
+ C_ASSERT(ARRAYSIZE(__wine_unix_call_funcs) == funcs_count);
+@@ -33620,6 +33621,7 @@
+ extern NTSTATUS wow64_thread_attach( void *args );
+ extern NTSTATUS wow64_process_detach( void *args );
+ extern NTSTATUS wow64_get_pixel_formats( void *args );
++extern NTSTATUS wow64_process_batch( void *args );
+ 
+ static NTSTATUS wow64_wgl_wglCopyContext( void *args )
+ {
+@@ -89966,6 +89968,7 @@
+     wow64_ext_wglSetPbufferAttribARB,
+     wow64_ext_wglSetPixelFormatWINE,
+     wow64_ext_wglSwapIntervalEXT,
++    wow64_process_batch,
+ };
+ 
+ C_ASSERT(ARRAYSIZE(__wine_unix_call_wow64_funcs) == funcs_count);
+--- a/dlls/opengl32/unix_wgl.c
++++ b/dlls/opengl32/unix_wgl.c
+@@ -2153,7 +2153,37 @@
+     vk_funcs = NULL;
+     return STATUS_SUCCESS;
+ }
++
++/* freequay: runs the OpenGL calls a 32-bit thread collected (wgl.c), in their order, and returns
++ * the status of the last one, the call that ended the batch */
++static NTSTATUS run_batch( const unixlib_entry_t *funcs, const char *data, UINT size )
++{
++    NTSTATUS status = STATUS_SUCCESS;
++    UINT pos = 0;
++
++    while (pos + sizeof(struct opengl_batch_entry) <= size)
++    {
++        const struct opengl_batch_entry *entry = (const struct opengl_batch_entry *)(data + pos);
+ 
++        if (entry->code >= funcs_count || entry->code == unix_process_batch)
++        {
++            ERR( "invalid call %u in batch\n", entry->code );
++            return STATUS_INVALID_PARAMETER;
++        }
++        status = funcs[entry->code]( (void *)(UINT_PTR)entry->params );
++        if (status && entry->size) WARN( "call %u in batch returned %#x\n", entry->code, (int)status );
++        pos += sizeof(*entry) + entry->size;
++    }
++    return status;
++}
++
++NTSTATUS process_batch( void *args )
++{
++    struct process_batch_params *params = args;
++
++    return run_batch( __wine_unix_call_funcs, params->data, params->size );
++}
++
+ NTSTATUS get_pixel_formats( void *args )
+ {
+     struct get_pixel_formats_params *params = args;
+@@ -3015,6 +3045,17 @@
+     wow64_strings_count = 0;
+ 
+     return STATUS_SUCCESS;
++}
++
++NTSTATUS wow64_process_batch( void *args )
++{
++    struct
++    {
++        PTR32 data;
++        UINT size;
++    } *params = args;
++
++    return run_batch( __wine_unix_call_wow64_funcs, ULongToPtr( params->data ), params->size );
+ }
+ 
+ NTSTATUS wow64_get_pixel_formats( void *args )
+--- a/dlls/opengl32/unixlib.h
++++ b/dlls/opengl32/unixlib.h
+@@ -28954,6 +28954,7 @@
+     unix_wglSetPbufferAttribARB,
+     unix_wglSetPixelFormatWINE,
+     unix_wglSwapIntervalEXT,
++    unix_process_batch,
+     funcs_count
+ };
+ 
+@@ -28970,6 +28971,22 @@
+     char message[1];
+ };
+ 
+-#define UNIX_CALL( func, params ) WINE_UNIX_CALL( unix_ ## func, params )
++/* freequay: calls of a 32-bit program collected by wgl.c and run by process_batch in one switch to
++ * the Unix side. An entry is followed by its copied parameters (size bytes, a multiple of 8); the
++ * call that ends a batch has size 0 and keeps its parameters where its thunk put them. */
++struct opengl_batch_entry
++{
++    UINT32 code;    /* enum unix_funcs */
++    UINT32 size;
++    UINT64 params;
++};
+ 
++struct process_batch_params
++{
++    void *data;     /* the entries */
++    UINT size;      /* bytes */
++};
++
++#define UNIX_CALL( func, params ) opengl_unix_call( unix_ ## func, params )
++
+ #endif /* __WINE_OPENGL32_UNIXLIB_H */
+--- a/dlls/opengl32/wgl.c
++++ b/dlls/opengl32/wgl.c
+@@ -51,6 +51,338 @@
+ 
+ #ifndef _WIN64
+ 
++/* freequay: batched OpenGL calls for 32-bit programs.
++ * A 32-bit program reaches the Mac's OpenGL through WoW64: every OpenGL call switches the
++ * processor from 32-bit to 64-bit mode and back, which Rosetta emulates, at 120 to 160 ns a call
++ * more than in a 64-bit program; that is more than many calls cost the driver. wined3d makes
++ * about eight calls a draw (state, textures, samplers, shader constants, the draw), and a 32-bit
++ * Direct3D 9 game spent a third more time in OpenGL than the same game built for 64 bit
++ * (tests/gl-call-cost, tests/d3d9-cpu). So a thread collects the calls that return nothing and
++ * take only values, and those that only set shader constants (with a copy of the values), and
++ * hands them over together with the next call that is not collected: a draw, a query,
++ * SwapBuffers, wglMakeCurrent. The Unix side runs them in their order before that call, in the
++ * same switch. Draw calls stay direct because they read the program's memory, and so do all
++ * functions whose thunks do more than pass the call on. Nothing changes for 64-bit programs.
++ * FREEQUAY_GL_BATCH=0 turns it off. */
++
++#define B(name) [unix_ ## name] = { sizeof(struct name ## _params) },
++#define V(name, n) [unix_ ## name] = { sizeof(struct name ## _params), offsetof(struct name ## _params, count), \
++                                       offsetof(struct name ## _params, value), (n) * 4 },
++const struct batch_info batch_info[funcs_count] =
++{
++    B(glAccum) B(glAlphaFunc) B(glBegin) B(glBindTexture) B(glBlendFunc) B(glCallList)
++    B(glClearAccum) B(glClearColor) B(glClearDepth) B(glClearIndex) B(glClearStencil) B(glColor3b)
++    B(glColor3d) B(glColor3f) B(glColor3i) B(glColor3s) B(glColor3ub) B(glColor3ui) B(glColor3us)
++    B(glColor4b) B(glColor4d) B(glColor4f) B(glColor4i) B(glColor4s) B(glColor4ub) B(glColor4ui)
++    B(glColor4us) B(glColorMask) B(glColorMaterial) B(glCullFace) B(glDeleteLists) B(glDepthFunc)
++    B(glDepthMask) B(glDepthRange) B(glDisable) B(glDisableClientState) B(glEdgeFlag) B(glEnable)
++    B(glEnableClientState) B(glEnd) B(glEndList) B(glEvalCoord1d) B(glEvalCoord1f) B(glEvalCoord2d)
++    B(glEvalCoord2f) B(glEvalMesh1) B(glEvalMesh2) B(glEvalPoint1) B(glEvalPoint2) B(glFogf)
++    B(glFogi) B(glFrontFace) B(glFrustum) B(glHint) B(glIndexMask) B(glIndexd) B(glIndexf)
++    B(glIndexi) B(glIndexs) B(glIndexub) B(glInitNames) B(glLightModelf) B(glLightModeli)
++    B(glLightf) B(glLighti) B(glLineStipple) B(glLineWidth) B(glListBase) B(glLoadIdentity)
++    B(glLoadName) B(glLogicOp) B(glMapGrid1d) B(glMapGrid1f) B(glMapGrid2d) B(glMapGrid2f)
++    B(glMaterialf) B(glMateriali) B(glMatrixMode) B(glNewList) B(glNormal3b) B(glNormal3d)
++    B(glNormal3f) B(glNormal3i) B(glNormal3s) B(glOrtho) B(glPassThrough) B(glPixelStoref)
++    B(glPixelStorei) B(glPixelTransferf) B(glPixelTransferi) B(glPixelZoom) B(glPointSize)
++    B(glPolygonMode) B(glPolygonOffset) B(glPopAttrib) B(glPopClientAttrib) B(glPopMatrix)
++    B(glPopName) B(glPushAttrib) B(glPushClientAttrib) B(glPushMatrix) B(glPushName)
++    B(glRasterPos2d) B(glRasterPos2f) B(glRasterPos2i) B(glRasterPos2s) B(glRasterPos3d)
++    B(glRasterPos3f) B(glRasterPos3i) B(glRasterPos3s) B(glRasterPos4d) B(glRasterPos4f)
++    B(glRasterPos4i) B(glRasterPos4s) B(glRectd) B(glRectf) B(glRecti) B(glRects) B(glRotated)
++    B(glRotatef) B(glScaled) B(glScalef) B(glScissor) B(glShadeModel) B(glStencilFunc)
++    B(glStencilMask) B(glStencilOp) B(glTexCoord1d) B(glTexCoord1f) B(glTexCoord1i) B(glTexCoord1s)
++    B(glTexCoord2d) B(glTexCoord2f) B(glTexCoord2i) B(glTexCoord2s) B(glTexCoord3d) B(glTexCoord3f)
++    B(glTexCoord3i) B(glTexCoord3s) B(glTexCoord4d) B(glTexCoord4f) B(glTexCoord4i) B(glTexCoord4s)
++    B(glTexEnvf) B(glTexEnvi) B(glTexGend) B(glTexGenf) B(glTexGeni) B(glTexParameterf)
++    B(glTexParameteri) B(glTranslated) B(glTranslatef) B(glVertex2d) B(glVertex2f) B(glVertex2i)
++    B(glVertex2s) B(glVertex3d) B(glVertex3f) B(glVertex3i) B(glVertex3s) B(glVertex4d)
++    B(glVertex4f) B(glVertex4i) B(glVertex4s) B(glActiveProgramEXT) B(glActiveShaderProgram)
++    B(glActiveStencilFaceEXT) B(glActiveTexture) B(glActiveTextureARB) B(glAlphaFuncx)
++    B(glApplyTextureEXT) B(glAttachObjectARB) B(glAttachShader) B(glBeginConditionalRender)
++    B(glBeginQuery) B(glBeginQueryARB) B(glBeginQueryIndexed) B(glBeginTransformFeedback)
++    B(glBeginTransformFeedbackEXT) B(glBeginVertexShaderEXT) B(glBindBuffer) B(glBindBufferARB)
++    B(glBindBufferBase) B(glBindBufferBaseEXT) B(glBindBufferOffsetEXT) B(glBindBufferRange)
++    B(glBindBufferRangeEXT) B(glBindImageTexture) B(glBindImageTextureEXT) B(glBindMultiTextureEXT)
++    B(glBindProgramARB) B(glBindProgramPipeline) B(glBindRenderbuffer) B(glBindRenderbufferEXT)
++    B(glBindSampler) B(glBindTextureEXT) B(glBindTextureUnit) B(glBindTransformFeedback)
++    B(glBindVertexArray) B(glBindVertexBuffer) B(glBindVertexShaderEXT) B(glBinormal3bEXT)
++    B(glBinormal3dEXT) B(glBinormal3fEXT) B(glBinormal3iEXT) B(glBinormal3sEXT) B(glBlendColor)
++    B(glBlendColorEXT) B(glBlendEquation) B(glBlendEquationEXT) B(glBlendEquationSeparate)
++    B(glBlendEquationSeparateEXT) B(glBlendEquationSeparatei) B(glBlendEquationSeparateiARB)
++    B(glBlendEquationi) B(glBlendEquationiARB) B(glBlendFuncSeparate) B(glBlendFuncSeparateEXT)
++    B(glBlendFuncSeparatei) B(glBlendFuncSeparateiARB) B(glBlendFunci) B(glBlendFunciARB)
++    B(glBlitFramebuffer) B(glBlitFramebufferEXT) B(glBlitFramebufferLayerEXT)
++    B(glBlitFramebufferLayersEXT) B(glBufferPageCommitmentARB) B(glClampColor) B(glClampColorARB)
++    B(glClearBufferfi) B(glClearColorIiEXT) B(glClearColorIuiEXT) B(glClearColorx) B(glClearDepthf)
++    B(glClearDepthx) B(glClientActiveTexture) B(glClientActiveTextureARB)
++    B(glClientAttribDefaultEXT) B(glClipControl) B(glColor4x) B(glColorMaskIndexedEXT)
++    B(glColorMaski) B(glColorP3ui) B(glColorP4ui) B(glCompileShader) B(glCompileShaderARB)
++    B(glConvolutionParameterf) B(glConvolutionParameterfEXT) B(glConvolutionParameteri)
++    B(glConvolutionParameteriEXT) B(glCopyBufferSubData) B(glCopyColorSubTable)
++    B(glCopyColorSubTableEXT) B(glCopyConvolutionFilter1D) B(glCopyConvolutionFilter1DEXT)
++    B(glCopyConvolutionFilter2D) B(glCopyConvolutionFilter2DEXT) B(glCopyImageSubData)
++    B(glCopyMultiTexImage1DEXT) B(glCopyMultiTexImage2DEXT) B(glCopyMultiTexSubImage1DEXT)
++    B(glCopyMultiTexSubImage2DEXT) B(glCopyMultiTexSubImage3DEXT) B(glCopyNamedBufferSubData)
++    B(glCopyTexImage1DEXT) B(glCopyTexImage2DEXT) B(glCopyTexSubImage1DEXT)
++    B(glCopyTexSubImage2DEXT) B(glCopyTexSubImage3DEXT) B(glCopyTextureImage1DEXT)
++    B(glCopyTextureImage2DEXT) B(glCopyTextureSubImage1DEXT) B(glCopyTextureSubImage2DEXT)
++    B(glCopyTextureSubImage3DEXT) B(glCurrentPaletteMatrixARB) B(glDeleteBufferRegion)
++    B(glDeleteObjectARB) B(glDeleteProgram) B(glDeleteShader) B(glDeleteVertexShaderEXT)
++    B(glDepthBoundsEXT) B(glDepthRangeIndexed) B(glDepthRangef) B(glDepthRangex)
++    B(glDetachObjectARB) B(glDetachShader) B(glDisableClientStateIndexedEXT)
++    B(glDisableClientStateiEXT) B(glDisableIndexedEXT) B(glDisableVariantClientStateEXT)
++    B(glDisableVertexArrayAttrib) B(glDisableVertexArrayAttribEXT) B(glDisableVertexArrayEXT)
++    B(glDisableVertexAttribArray) B(glDisableVertexAttribArrayARB) B(glDisablei)
++    B(glDispatchCompute) B(glDispatchComputeGroupSizeARB) B(glDispatchComputeIndirect)
++    B(glEnableClientStateIndexedEXT) B(glEnableClientStateiEXT) B(glEnableIndexedEXT)
++    B(glEnableVariantClientStateEXT) B(glEnableVertexArrayAttrib) B(glEnableVertexArrayAttribEXT)
++    B(glEnableVertexArrayEXT) B(glEnableVertexAttribArray) B(glEnableVertexAttribArrayARB)
++    B(glEnablei) B(glEndConditionalRender) B(glEndQuery) B(glEndQueryARB) B(glEndQueryIndexed)
++    B(glEndTransformFeedback) B(glEndTransformFeedbackEXT) B(glEndVertexShaderEXT)
++    B(glEvaluateDepthValuesARB) B(glExtractComponentEXT) B(glFogCoordd) B(glFogCoorddEXT)
++    B(glFogCoordf) B(glFogCoordfEXT) B(glFogx) B(glFramebufferFetchBarrierEXT)
++    B(glFramebufferParameteri) B(glFrustumf) B(glFrustumx) B(glGenerateMipmap)
++    B(glGenerateMipmapEXT) B(glGenerateMultiTexMipmapEXT) B(glGenerateTextureMipmap)
++    B(glGenerateTextureMipmapEXT) B(glGetQueryBufferObjecti64v) B(glGetQueryBufferObjectiv)
++    B(glGetQueryBufferObjectui64v) B(glGetQueryBufferObjectuiv) B(glHistogram) B(glHistogramEXT)
++    B(glIndexFuncEXT) B(glIndexMaterialEXT) B(glInsertComponentEXT) B(glInvalidateBufferData)
++    B(glInvalidateBufferSubData) B(glInvalidateTexImage) B(glInvalidateTexSubImage) B(glLightModelx)
++    B(glLightx) B(glLineWidthx) B(glLinkProgram) B(glLinkProgramARB)
++    B(glMakeImageHandleNonResidentARB) B(glMakeImageHandleResidentARB)
++    B(glMakeTextureHandleNonResidentARB) B(glMakeTextureHandleResidentARB) B(glMaterialx)
++    B(glMatrixFrustumEXT) B(glMatrixLoadIdentityEXT) B(glMatrixOrthoEXT) B(glMatrixPopEXT)
++    B(glMatrixPushEXT) B(glMatrixRotatedEXT) B(glMatrixRotatefEXT) B(glMatrixScaledEXT)
++    B(glMatrixScalefEXT) B(glMatrixTranslatedEXT) B(glMatrixTranslatefEXT)
++    B(glMaxShaderCompilerThreadsARB) B(glMemoryBarrier) B(glMemoryBarrierByRegion)
++    B(glMemoryBarrierEXT) B(glMinSampleShading) B(glMinSampleShadingARB) B(glMinmax) B(glMinmaxEXT)
++    B(glMultiTexBufferEXT) B(glMultiTexCoord1d) B(glMultiTexCoord1dARB) B(glMultiTexCoord1f)
++    B(glMultiTexCoord1fARB) B(glMultiTexCoord1i) B(glMultiTexCoord1iARB) B(glMultiTexCoord1s)
++    B(glMultiTexCoord1sARB) B(glMultiTexCoord2d) B(glMultiTexCoord2dARB) B(glMultiTexCoord2f)
++    B(glMultiTexCoord2fARB) B(glMultiTexCoord2i) B(glMultiTexCoord2iARB) B(glMultiTexCoord2s)
++    B(glMultiTexCoord2sARB) B(glMultiTexCoord3d) B(glMultiTexCoord3dARB) B(glMultiTexCoord3f)
++    B(glMultiTexCoord3fARB) B(glMultiTexCoord3i) B(glMultiTexCoord3iARB) B(glMultiTexCoord3s)
++    B(glMultiTexCoord3sARB) B(glMultiTexCoord4d) B(glMultiTexCoord4dARB) B(glMultiTexCoord4f)
++    B(glMultiTexCoord4fARB) B(glMultiTexCoord4i) B(glMultiTexCoord4iARB) B(glMultiTexCoord4s)
++    B(glMultiTexCoord4sARB) B(glMultiTexCoord4x) B(glMultiTexCoordP1ui) B(glMultiTexCoordP2ui)
++    B(glMultiTexCoordP3ui) B(glMultiTexCoordP4ui) B(glMultiTexEnvfEXT) B(glMultiTexEnviEXT)
++    B(glMultiTexGendEXT) B(glMultiTexGenfEXT) B(glMultiTexGeniEXT) B(glMultiTexParameterfEXT)
++    B(glMultiTexParameteriEXT) B(glMultiTexRenderbufferEXT) B(glNamedBufferPageCommitmentARB)
++    B(glNamedBufferPageCommitmentEXT) B(glNamedCopyBufferSubDataEXT)
++    B(glNamedFramebufferRenderbuffer) B(glNamedFramebufferRenderbufferEXT)
++    B(glNamedFramebufferTexture) B(glNamedFramebufferTexture1DEXT) B(glNamedFramebufferTexture2DEXT)
++    B(glNamedFramebufferTexture3DEXT) B(glNamedFramebufferTextureEXT)
++    B(glNamedFramebufferTextureFaceEXT) B(glNamedFramebufferTextureLayer)
++    B(glNamedFramebufferTextureLayerEXT) B(glNamedProgramLocalParameter4dEXT)
++    B(glNamedProgramLocalParameter4fEXT) B(glNamedProgramLocalParameterI4iEXT)
++    B(glNamedProgramLocalParameterI4uiEXT) B(glNamedRenderbufferStorage)
++    B(glNamedRenderbufferStorageEXT) B(glNamedRenderbufferStorageMultisample)
++    B(glNamedRenderbufferStorageMultisampleCoverageEXT) B(glNamedRenderbufferStorageMultisampleEXT)
++    B(glNormal3x) B(glNormalP3ui) B(glOrthof) B(glOrthox) B(glPatchParameteri)
++    B(glPauseTransformFeedback) B(glPixelStorex) B(glPixelTransformParameterfEXT)
++    B(glPixelTransformParameteriEXT) B(glPointParameterf) B(glPointParameterfARB)
++    B(glPointParameterfEXT) B(glPointParameteri) B(glPointParameterx) B(glPointSizex)
++    B(glPolygonOffsetClamp) B(glPolygonOffsetClampEXT) B(glPolygonOffsetEXT) B(glPolygonOffsetx)
++    B(glPopDebugGroup) B(glPopGroupMarkerEXT) B(glPrimitiveBoundingBoxARB)
++    B(glPrimitiveRestartIndex) B(glProgramEnvParameter4dARB) B(glProgramEnvParameter4fARB)
++    B(glProgramLocalParameter4dARB) B(glProgramLocalParameter4fARB) B(glProgramParameteri)
++    B(glProgramParameteriARB) B(glProgramParameteriEXT) B(glProgramUniform1d)
++    B(glProgramUniform1dEXT) B(glProgramUniform1f) B(glProgramUniform1fEXT) B(glProgramUniform1i)
++    B(glProgramUniform1i64ARB) B(glProgramUniform1iEXT) B(glProgramUniform1ui)
++    B(glProgramUniform1ui64ARB) B(glProgramUniform1uiEXT) B(glProgramUniform2d)
++    B(glProgramUniform2dEXT) B(glProgramUniform2f) B(glProgramUniform2fEXT) B(glProgramUniform2i)
++    B(glProgramUniform2i64ARB) B(glProgramUniform2iEXT) B(glProgramUniform2ui)
++    B(glProgramUniform2ui64ARB) B(glProgramUniform2uiEXT) B(glProgramUniform3d)
++    B(glProgramUniform3dEXT) B(glProgramUniform3f) B(glProgramUniform3fEXT) B(glProgramUniform3i)
++    B(glProgramUniform3i64ARB) B(glProgramUniform3iEXT) B(glProgramUniform3ui)
++    B(glProgramUniform3ui64ARB) B(glProgramUniform3uiEXT) B(glProgramUniform4d)
++    B(glProgramUniform4dEXT) B(glProgramUniform4f) B(glProgramUniform4fEXT) B(glProgramUniform4i)
++    B(glProgramUniform4i64ARB) B(glProgramUniform4iEXT) B(glProgramUniform4ui)
++    B(glProgramUniform4ui64ARB) B(glProgramUniform4uiEXT) B(glProgramUniformHandleui64ARB)
++    B(glProvokingVertex) B(glProvokingVertexEXT) B(glPushClientAttribDefaultEXT) B(glQueryCounter)
++    B(glRasterSamplesEXT) B(glReadBufferRegion) B(glReleaseShaderCompiler) B(glRenderbufferStorage)
++    B(glRenderbufferStorageEXT) B(glRenderbufferStorageMultisample)
++    B(glRenderbufferStorageMultisampleEXT) B(glResetHistogram) B(glResetHistogramEXT)
++    B(glResetMinmax) B(glResetMinmaxEXT) B(glResumeTransformFeedback) B(glRotatex)
++    B(glSampleCoverage) B(glSampleCoverageARB) B(glSampleCoveragex) B(glSampleMaskEXT)
++    B(glSampleMaski) B(glSamplePatternEXT) B(glSamplerParameterf) B(glSamplerParameteri) B(glScalex)
++    B(glScissorIndexed) B(glSecondaryColor3b) B(glSecondaryColor3bEXT) B(glSecondaryColor3d)
++    B(glSecondaryColor3dEXT) B(glSecondaryColor3f) B(glSecondaryColor3fEXT) B(glSecondaryColor3i)
++    B(glSecondaryColor3iEXT) B(glSecondaryColor3s) B(glSecondaryColor3sEXT) B(glSecondaryColor3ub)
++    B(glSecondaryColor3ubEXT) B(glSecondaryColor3ui) B(glSecondaryColor3uiEXT)
++    B(glSecondaryColor3us) B(glSecondaryColor3usEXT) B(glSecondaryColorP3ui) B(glShaderOp1EXT)
++    B(glShaderOp2EXT) B(glShaderOp3EXT) B(glShaderStorageBlockBinding) B(glStencilClearTagEXT)
++    B(glStencilFuncSeparate) B(glStencilMaskSeparate) B(glStencilOpSeparate) B(glSwizzleEXT)
++    B(glTangent3bEXT) B(glTangent3dEXT) B(glTangent3fEXT) B(glTangent3iEXT) B(glTangent3sEXT)
++    B(glTexBuffer) B(glTexBufferARB) B(glTexBufferEXT) B(glTexBufferRange) B(glTexCoordP1ui)
++    B(glTexCoordP2ui) B(glTexCoordP3ui) B(glTexCoordP4ui) B(glTexEnvx) B(glTexImage2DMultisample)
++    B(glTexImage3DMultisample) B(glTexPageCommitmentARB) B(glTexParameterx) B(glTexStorage1D)
++    B(glTexStorage1DEXT) B(glTexStorage2D) B(glTexStorage2DEXT) B(glTexStorage2DMultisample)
++    B(glTexStorage3D) B(glTexStorage3DEXT) B(glTexStorage3DMultisample) B(glTexStorageMem1DEXT)
++    B(glTexStorageMem2DEXT) B(glTexStorageMem2DMultisampleEXT) B(glTexStorageMem3DEXT)
++    B(glTexStorageMem3DMultisampleEXT) B(glTextureBarrier) B(glTextureBuffer) B(glTextureBufferEXT)
++    B(glTextureBufferRange) B(glTextureBufferRangeEXT) B(glTextureLightEXT) B(glTextureMaterialEXT)
++    B(glTextureNormalEXT) B(glTexturePageCommitmentEXT) B(glTextureParameterf)
++    B(glTextureParameterfEXT) B(glTextureParameteri) B(glTextureParameteriEXT)
++    B(glTextureRenderbufferEXT) B(glTextureStorage1D) B(glTextureStorage1DEXT) B(glTextureStorage2D)
++    B(glTextureStorage2DEXT) B(glTextureStorage2DMultisample) B(glTextureStorage2DMultisampleEXT)
++    B(glTextureStorage3D) B(glTextureStorage3DEXT) B(glTextureStorage3DMultisample)
++    B(glTextureStorage3DMultisampleEXT) B(glTextureStorageMem1DEXT) B(glTextureStorageMem2DEXT)
++    B(glTextureStorageMem2DMultisampleEXT) B(glTextureStorageMem3DEXT)
++    B(glTextureStorageMem3DMultisampleEXT) B(glTextureView) B(glTransformFeedbackBufferBase)
++    B(glTransformFeedbackBufferRange) B(glTranslatex) B(glUniform1d) B(glUniform1f)
++    B(glUniform1fARB) B(glUniform1i) B(glUniform1i64ARB) B(glUniform1iARB) B(glUniform1ui)
++    B(glUniform1ui64ARB) B(glUniform1uiEXT) B(glUniform2d) B(glUniform2f) B(glUniform2fARB)
++    B(glUniform2i) B(glUniform2i64ARB) B(glUniform2iARB) B(glUniform2ui) B(glUniform2ui64ARB)
++    B(glUniform2uiEXT) B(glUniform3d) B(glUniform3f) B(glUniform3fARB) B(glUniform3i)
++    B(glUniform3i64ARB) B(glUniform3iARB) B(glUniform3ui) B(glUniform3ui64ARB) B(glUniform3uiEXT)
++    B(glUniform4d) B(glUniform4f) B(glUniform4fARB) B(glUniform4i) B(glUniform4i64ARB)
++    B(glUniform4iARB) B(glUniform4ui) B(glUniform4ui64ARB) B(glUniform4uiEXT)
++    B(glUniformBlockBinding) B(glUniformBufferEXT) B(glUniformHandleui64ARB) B(glUnlockArraysEXT)
++    B(glUseProgram) B(glUseProgramObjectARB) B(glUseProgramStages) B(glUseShaderProgramEXT)
++    B(glValidateProgram) B(glValidateProgramARB) B(glValidateProgramPipeline)
++    B(glVertexArrayAttribBinding) B(glVertexArrayAttribFormat) B(glVertexArrayAttribIFormat)
++    B(glVertexArrayAttribLFormat) B(glVertexArrayBindVertexBufferEXT) B(glVertexArrayBindingDivisor)
++    B(glVertexArrayColorOffsetEXT) B(glVertexArrayEdgeFlagOffsetEXT)
++    B(glVertexArrayFogCoordOffsetEXT) B(glVertexArrayIndexOffsetEXT)
++    B(glVertexArrayMultiTexCoordOffsetEXT) B(glVertexArrayNormalOffsetEXT)
++    B(glVertexArraySecondaryColorOffsetEXT) B(glVertexArrayTexCoordOffsetEXT)
++    B(glVertexArrayVertexAttribBindingEXT) B(glVertexArrayVertexAttribDivisorEXT)
++    B(glVertexArrayVertexAttribFormatEXT) B(glVertexArrayVertexAttribIFormatEXT)
++    B(glVertexArrayVertexAttribIOffsetEXT) B(glVertexArrayVertexAttribLFormatEXT)
++    B(glVertexArrayVertexAttribLOffsetEXT) B(glVertexArrayVertexAttribOffsetEXT)
++    B(glVertexArrayVertexBindingDivisorEXT) B(glVertexArrayVertexBuffer)
++    B(glVertexArrayVertexOffsetEXT) B(glVertexAttrib1d) B(glVertexAttrib1dARB) B(glVertexAttrib1f)
++    B(glVertexAttrib1fARB) B(glVertexAttrib1s) B(glVertexAttrib1sARB) B(glVertexAttrib2d)
++    B(glVertexAttrib2dARB) B(glVertexAttrib2f) B(glVertexAttrib2fARB) B(glVertexAttrib2s)
++    B(glVertexAttrib2sARB) B(glVertexAttrib3d) B(glVertexAttrib3dARB) B(glVertexAttrib3f)
++    B(glVertexAttrib3fARB) B(glVertexAttrib3s) B(glVertexAttrib3sARB) B(glVertexAttrib4Nub)
++    B(glVertexAttrib4NubARB) B(glVertexAttrib4d) B(glVertexAttrib4dARB) B(glVertexAttrib4f)
++    B(glVertexAttrib4fARB) B(glVertexAttrib4s) B(glVertexAttrib4sARB) B(glVertexAttribBinding)
++    B(glVertexAttribDivisor) B(glVertexAttribDivisorARB) B(glVertexAttribFormat)
++    B(glVertexAttribI1i) B(glVertexAttribI1iEXT) B(glVertexAttribI1ui) B(glVertexAttribI1uiEXT)
++    B(glVertexAttribI2i) B(glVertexAttribI2iEXT) B(glVertexAttribI2ui) B(glVertexAttribI2uiEXT)
++    B(glVertexAttribI3i) B(glVertexAttribI3iEXT) B(glVertexAttribI3ui) B(glVertexAttribI3uiEXT)
++    B(glVertexAttribI4i) B(glVertexAttribI4iEXT) B(glVertexAttribI4ui) B(glVertexAttribI4uiEXT)
++    B(glVertexAttribIFormat) B(glVertexAttribL1d) B(glVertexAttribL1dEXT) B(glVertexAttribL1ui64ARB)
++    B(glVertexAttribL2d) B(glVertexAttribL2dEXT) B(glVertexAttribL3d) B(glVertexAttribL3dEXT)
++    B(glVertexAttribL4d) B(glVertexAttribL4dEXT) B(glVertexAttribLFormat) B(glVertexAttribP1ui)
++    B(glVertexAttribP2ui) B(glVertexAttribP3ui) B(glVertexAttribP4ui) B(glVertexBindingDivisor)
++    B(glVertexBlendARB) B(glVertexP2ui) B(glVertexP3ui) B(glVertexP4ui) B(glVertexWeightfEXT)
++    B(glViewportIndexedf) B(glWindowPos2d) B(glWindowPos2dARB) B(glWindowPos2f) B(glWindowPos2fARB)
++    B(glWindowPos2i) B(glWindowPos2iARB) B(glWindowPos2s) B(glWindowPos2sARB) B(glWindowPos3d)
++    B(glWindowPos3dARB) B(glWindowPos3f) B(glWindowPos3fARB) B(glWindowPos3i) B(glWindowPos3iARB)
++    B(glWindowPos3s) B(glWindowPos3sARB) B(glWriteMaskEXT)
++    V(glUniform1fv, 1) V(glUniform1fvARB, 1) V(glUniform1iv, 1) V(glUniform1ivARB, 1)
++    V(glUniform1uiv, 1) V(glUniform2fv, 2) V(glUniform2fvARB, 2) V(glUniform2iv, 2)
++    V(glUniform2ivARB, 2) V(glUniform2uiv, 2) V(glUniform3fv, 3) V(glUniform3fvARB, 3)
++    V(glUniform3iv, 3) V(glUniform3ivARB, 3) V(glUniform3uiv, 3) V(glUniform4fv, 4)
++    V(glUniform4fvARB, 4) V(glUniform4iv, 4) V(glUniform4ivARB, 4) V(glUniform4uiv, 4)
++    V(glUniformMatrix2fv, 4) V(glUniformMatrix2fvARB, 4) V(glUniformMatrix2x3fv, 6)
++    V(glUniformMatrix2x4fv, 8) V(glUniformMatrix3fv, 9) V(glUniformMatrix3fvARB, 9)
++    V(glUniformMatrix3x2fv, 6) V(glUniformMatrix3x4fv, 12) V(glUniformMatrix4fv, 16)
++    V(glUniformMatrix4fvARB, 16) V(glUniformMatrix4x2fv, 8) V(glUniformMatrix4x3fv, 12)
++};
++#undef B
++#undef V
++
++static BOOL batch_disabled;
++
++static struct opengl_batch *get_batch(void)
++{
++    struct opengl_batch *batch = NtCurrentTeb()->glReserved1[WINE_GL_RESERVED_BATCH];
++
++    if (!batch && !batch_disabled && (batch = malloc( sizeof(*batch) )))
++    {
++        batch->used = 0;
++        batch->busy = FALSE;
++        NtCurrentTeb()->glReserved1[WINE_GL_RESERVED_BATCH] = batch;
++    }
++    return batch;
++}
++
++/* runs the entries on the Unix side, in one switch, and empties the batch */
++static NTSTATUS batch_run( struct opengl_batch *batch, UINT size )
++{
++    struct process_batch_params args = { .data = batch->data, .size = size };
++    NTSTATUS status;
++
++    batch->used = 0;
++    batch->busy = TRUE;
++    status = WINE_UNIX_CALL( unix_process_batch, &args );
++    batch->busy = FALSE;
++    return status;
++}
++
++BOOL batch_add( enum unix_funcs code, void *params )
++{
++    const struct batch_info *info = &batch_info[code];
++    struct opengl_batch *batch = get_batch();
++    UINT size = (info->size + 7) & ~7, values_size = 0;
++    struct opengl_batch_entry *entry;
++    const void *values = NULL;
++    BYTE *copy;
++
++    if (!batch || batch->busy) return FALSE;
++    if (info->value_size)
++    {
++        GLsizei count = *(const GLsizei *)((const BYTE *)params + info->count_offset);
++
++        /* odd counts go to the driver directly, for its error */
++        values = *(const void * const *)((const BYTE *)params + info->value_offset);
++        if (count <= 0 || count > 256 || !values) return FALSE;
++        values_size = count * info->value_size;
++    }
++    if (batch->used + sizeof(*entry) + size + values_size > sizeof(batch->data)) batch_run( batch, batch->used );
++
++    entry = (struct opengl_batch_entry *)((BYTE *)batch->data + batch->used);
++    copy = (BYTE *)(entry + 1);
++    memcpy( copy, params, info->size );
++    if (values_size)
++    {
++        memcpy( copy + size, values, values_size );
++        *(const void **)(copy + info->value_offset) = copy + size;
++        values_size = (values_size + 7) & ~7;
++    }
++    entry->code = code;
++    entry->size = size + values_size;
++    entry->params = (UINT_PTR)copy;
++    batch->used += sizeof(*entry) + entry->size;
++    return TRUE;
++}
++
++/* runs the collected calls and then this one, which ends the batch, in the same switch */
++NTSTATUS batch_flush( enum unix_funcs code, void *params )
++{
++    struct opengl_batch *batch = NtCurrentTeb()->glReserved1[WINE_GL_RESERVED_BATCH];
++    struct opengl_batch_entry *entry;
++
++    if (batch->used + sizeof(*entry) > sizeof(batch->data))
++    {
++        batch_run( batch, batch->used );
++        return WINE_UNIX_CALL( code, params );
++    }
++    entry = (struct opengl_batch_entry *)((BYTE *)batch->data + batch->used);
++    entry->code = code;
++    entry->size = 0;
++    entry->params = (UINT_PTR)params;
++    return batch_run( batch, batch->used + sizeof(*entry) );
++}
++
++static void batch_thread_detach(void)
++{
++    struct opengl_batch *batch = NtCurrentTeb()->glReserved1[WINE_GL_RESERVED_BATCH];
++
++    if (!batch) return;
++    if (batch->used && !batch->busy) batch_run( batch, batch->used );
++    NtCurrentTeb()->glReserved1[WINE_GL_RESERVED_BATCH] = NULL;
++    free( batch );
++}
++
++#endif
++
++#ifndef _WIN64
++
+ static char **wow64_strings;
+ static SIZE_T wow64_strings_count;
+ 
+@@ -1727,7 +2059,15 @@
+         {
+             ERR( "Failed to load unixlib, status %#lx\n", status );
+             return FALSE;
++        }
++#ifndef _WIN64
++        {
++            char value[4];
++
++            if (GetEnvironmentVariableA( "FREEQUAY_GL_BATCH", value, sizeof(value) ) && value[0] == '0')
++                batch_disabled = TRUE;
+         }
++#endif
+ 
+         /* fallthrough */
+     case DLL_THREAD_ATTACH:
+@@ -1746,6 +2086,9 @@
+ #endif
+         /* fallthrough */
+     case DLL_THREAD_DETACH:
++#ifndef _WIN64
++        batch_thread_detach();
++#endif
+         free( NtCurrentTeb()->glReserved1[WINE_GL_RESERVED_FORMATS_PTR] );
+         return TRUE;
+     }

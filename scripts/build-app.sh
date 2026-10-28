@@ -16,7 +16,7 @@ APP=$ROOT/Freequay.app
 rm -rf "$APP" "$BUILD/Freequay.iconset"
 mkdir -p "$BUILD" "$APP/Contents/MacOS" "$APP/Contents/Resources"
 xcrun swiftc -O -parse-as-library -target arm64-apple-macos13.0 -module-cache-path "$BUILD/ModuleCache" \
-  -o "$APP/Contents/MacOS/Freequay" "$ROOT/app/Freequay.swift"
+  -o "$APP/Contents/MacOS/Freequay" "$ROOT/app/Freequay.swift" "$ROOT/app/Report.swift"
 xcrun swiftc -O -parse-as-library -target arm64-apple-macos13.0 -module-cache-path "$BUILD/ModuleCache" \
   -o "$ROOT/scripts/compat/applegamingwiki" "$ROOT/scripts/compat/applegamingwiki.swift"
 for tool in fix cabextract; do

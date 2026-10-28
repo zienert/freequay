@@ -6,7 +6,7 @@ Freequay.app contains the parts below, in `Contents/SharedSupport/freequay`. Eac
 
 | Part | Version | License | Texts |
 |---|---|---|---|
-| Wine with CodeWeavers' patches and Freequay's patches `0001` to `0008` | 11.0, from CrossOver 26.3.0 | LGPL-2.1-or-later | `wine/` |
+| Wine with CodeWeavers' patches and Freequay's patches `0001` to `0012` | 11.0, from CrossOver 26.3.0 | LGPL-2.1-or-later | `wine/` |
 | Libraries Wine builds in: Capstone, compiler-rt, FAudio, FluidSynth, GSM, libjpeg, jxrlib, Little CMS, OpenLDAP, mpg123, musl, libpng, LibTIFF, LibTomCrypt, vkd3d, libxml2, libxslt, zlib | as in the Wine sources | their own: LGPL-2.1 (FluidSynth, mpg123, vkd3d), BSD, MIT, zlib and similar permissive licenses | `wine/libs/<name>/` |
 | GnuTLS, with the libtasn1 and libunistring it includes | 3.8.3 | LGPL-2.1-or-later; libunistring LGPL-3.0-or-later or GPL-2.0-or-later | `gnutls/`, texts of version 3 in `gmp/` |
 | GMP | 6.3.0 | LGPL-3.0-or-later or GPL-2.0-or-later | `gmp/` |
@@ -15,9 +15,9 @@ Freequay.app contains the parts below, in `Contents/SharedSupport/freequay`. Eac
 | GLib (libglib, libgobject, libgmodule), with Freequay's patch `glib-0001` | 2.78.0, from CrossOver 26.3.0 | LGPL-2.1-or-later | `glib/` |
 | Inside GLib: pcre2 and proxy-libintl | 10.42 and 0.4 | pcre2 BSD-3-Clause (with an exemption for binary redistribution); proxy-libintl LGPL-2.0-or-later | `glib/pcre2/`, `glib/proxy-libintl/` |
 | GStreamer: the core and the libraries and plugins Wine's winegstreamer uses from base, good and bad | 1.24.4, from CrossOver 26.3.0 | LGPL-2.1-or-later; the MPEG program stream demuxer MPL-1.1 or LGPL, used under the LGPL | `gstreamer/` |
-| MoltenVK, CodeWeavers' version, with Freequay's patches `moltenvk-0001` and `-0002` | 1.2.10 | Apache-2.0 | `moltenvk/` |
+| MoltenVK, CodeWeavers' version, with Freequay's patches `moltenvk-0001` to `-0003` | 1.2.10 | Apache-2.0 | `moltenvk/` |
 | Inside MoltenVK: SPIRV-Cross (CodeWeavers' version), glslang, cereal, Vulkan-Headers | as in MoltenVK's `ExternalRevisions` | Apache-2.0; glslang BSD-3-Clause and others; cereal BSD-3-Clause | `moltenvk/<name>/` |
-| DXVK, CodeWeavers' Mac version, with Freequay's patches `dxvk-0001` to `-0003` | 1.10.3 | zlib; the OpenVR header it uses BSD-3-Clause | `dxvk/` |
+| DXVK, CodeWeavers' Mac version, with Freequay's patches `dxvk-0001` to `-0004` | 1.10.3 | zlib; the OpenVR header it uses BSD-3-Clause | `dxvk/` |
 | DXMT, release build from github.com/3Shain/dxmt | 0.80 | MIT (the license at that release; later versions are LGPL-2.1) | `dxmt/LICENSE` |
 | Inside DXMT: DXBCParser (Microsoft), NVAPI headers (NVIDIA), LLVM 15 | | MIT; MIT; Apache-2.0 with LLVM exception | `dxmt/` |
 
