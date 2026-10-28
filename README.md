@@ -46,7 +46,8 @@ Videos in games play through GStreamer, for Media Foundation and DirectShow alik
 - Open starts a program. Programs start one at a time: the row shows a spinner until the program's window appears, and Open on a program whose window is still open brings it forward.
 - An installer or any other `.exe` dropped on the window or the Dock icon, or double-clicked in Finder, starts in the chosen bottle. A click on the strip at the foot of the list picks one instead.
 - Every bottle has your whole Mac as drive Z:, so a Windows program can read and change all your files. Open only programs you trust.
-- A right click takes a program off the list. Nothing is deleted or uninstalled.
+- A right click takes a program off the list, where nothing is deleted or uninstalled, or reports it on GitHub.
+- Report on GitHub, after a start that failed and in the right-click menu, opens a game report in your browser, filled in with the program's name, the message from the window, your Mac's chip, model, memory and macOS version and the Freequay version. The Help menu opens an empty game report or a bug report. Nothing is sent until you submit the form on GitHub, which needs a GitHub account and makes the report public.
 - Show files opens the bottle's drive C: in Finder; Stop all programs ends every program of the bottle. Programs keep running when the app quits.
 - If a program lies in Downloads, Documents or on the Desktop, macOS asks whether Freequay may access that folder. Allow it, or Wine cannot read the program.
 - Add D3DMetal opens Apple's download page for "Evaluation environment for Windows games", free with an Apple Account. Freequay finds the disk image in Downloads, notes that D3DMetal is Apple's and under Apple's license, which allows using it to develop, test and evaluate games, and installs it when you click Install. If macOS shows Apple's license as the image opens, agree to it.
@@ -316,6 +317,8 @@ Before the patches the command thread was the limit: it worked through nearly al
 
 With both patches all 12 graphics programs passed without `--backend` and with `wined3d` and `dxvk`, and the four video programs passed; their images were the same as before (`tests/d3d9-cpu` gave the hash of the 64-bit program). Wine's own tests, built as 32-bit programs: d3d9 `visual` gave the same 211,215 checks with the same 47 failures, line for line, and `stateblock` 14,738 checks without failures. opengl32's test gave the same output line for line with both patches, with patch 0011 turned off (`FREEQUAY_GL_BATCH=0`) and with the DLLs of the SSE2 build, apart from handle values: 15,425 checks with 2,062 failures, all from OpenGL on the Mac, also those of `test_gl_error`, which checks the order of OpenGL errors. Its `test_memory_map` ends the process with every one of these builds and was left out of these runs. Not tried yet: a 32-bit game with the patches, and the batching for 64-bit programs, where a switch costs about 50 ns.
 
+Report on GitHub was tested on 2026-10-28. `tests/report-url.swift` checks the addresses of the filled-in forms: every text field arrives as it went in, also with `'`, `®`, `&`, `+`, `#` and umlauts, the choices stay empty, the user name stays out of messages and the longest address stays under 8000 characters (15 checks). In the app, a program that ends with exit code 5 in a new bottle left "stopped right away (exit code 5)" in the status line with Report on GitHub next to it; that button, the entry in the right-click menu and the two in the Help menu were read through Accessibility.
+
 `tests/` has the small programs behind these tests; build them as their first comment says, with mingw-w64 and `macswitch` with clang, and the video clip with `tests/make-clip.swift`. `tests/rulecheck` shows what the rules changed for a program: its path, command line, environment variables and where `d3d11.dll` comes from. `tests/minimize-on-deactivate` is a fullscreen window that minimizes itself when the program loses the focus, and `tests/macswitch` presses Cmd+Tab and clicks the Dock for it; it needs Accessibility for the program that starts it.
 
 ## Folders
@@ -324,7 +327,7 @@ With both patches all 12 graphics programs passed without `--backend` and with `
 
 ## Reports and help
 
-- A game that runs or does not run: [game report](https://github.com/zienert/freequay/issues/new?template=game-report.yml).
+- A game that runs or does not run: [game report](https://github.com/zienert/freequay/issues/new?template=game-report.yml), or Report on GitHub in the app, which fills in the game, your Mac and the version.
 - A bug in Freequay itself: [bug report](https://github.com/zienert/freequay/issues/new?template=bug.yml).
 - A security problem: in private, see [SECURITY.md](SECURITY.md).
 - Rules for games and changes to the code: see [CONTRIBUTING.md](CONTRIBUTING.md).

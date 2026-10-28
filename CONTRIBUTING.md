@@ -4,7 +4,7 @@ Freequay is a small project run by one person. There is no support and no promis
 
 ## Tell us how a game went
 
-Open a [game report](https://github.com/zienert/freequay/issues/new?template=game-report.yml). A game that runs is as useful to know about as one that does not. Give the Freequay version, your Mac and macOS, and what you tried. Issues are public, and logs can contain your user name and folder names, so remove them first.
+Open a [game report](https://github.com/zienert/freequay/issues/new?template=game-report.yml), or click Report on GitHub in the app, which fills in the game, your Mac and the Freequay version. A game that runs is as useful to know about as one that does not. Give the Freequay version, your Mac and macOS, and what you tried. Issues are public, and logs can contain your user name and folder names, so remove them first.
 
 A bug in Freequay itself (the app, the `freequay` command, the installation) goes into a [bug report](https://github.com/zienert/freequay/issues/new?template=bug.yml). A security problem is reported in private, see [SECURITY.md](SECURITY.md).
 
