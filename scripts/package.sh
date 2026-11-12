@@ -7,13 +7,19 @@
 # as it is. Left out: D3DMetal (Apple's license; the app leads to Apple's download), Wine Mono (the
 # first bottle downloads it from WineHQ), the rules from AppleGamingWiki (its license allows no
 # commercial use; they are looked up on the user's Mac) and what only building needs.
-# Usage: package.sh <version> [identity]   writes out/Freequay-<version>.dmg and its .sha256; the
-#                                          identity goes to scripts/sign.sh, ad hoc without one
+# Usage: package.sh <version> [identity]   writes out/Freequay-<version>.dmg and its .sha256. Without an
+#                                          identity it signs with the Developer ID in the keychain, and
+#                                          Apple notarizes the app and the image (scripts/notarize.sh);
+#                                          "-" signs ad hoc, without notarization
 set -euo pipefail
 
 ROOT=${0:A:h:h}
 VERSION=${1:?version missing, for example 0.3.0}
-ID=${2:--}
+ID=${2:-$(security find-identity -v -p codesigning | awk '/"Developer ID Application: /{print $2; exit}')}
+if [[ -z $ID ]]; then
+  print -u2 "no Developer ID Application certificate in the keychain, signing ad hoc without notarization"
+  ID=-
+fi
 PKG=$ROOT/build/package
 APP=$PKG/Freequay.app
 STAGE=$APP/Contents/SharedSupport/freequay
@@ -145,6 +151,8 @@ done
 
 print "==> signing"
 "$ROOT/scripts/sign.sh" "$APP" "$ID"
+# the app gets a ticket of its own, so it opens offline once it is out of the image
+[[ $ID == - ]] || "$ROOT/scripts/notarize.sh" "$APP"
 
 print "==> disk image $OUT"
 mkdir -p "$PKG/dmg"
@@ -152,6 +160,10 @@ mv "$APP" "$PKG/dmg/"
 ln -s /Applications "$PKG/dmg/Applications"
 rm -f "$OUT" "$OUT.sha256"
 hdiutil create -quiet -volname Freequay -srcfolder "$PKG/dmg" -fs APFS -format ULMO -o "$OUT"
+if [[ $ID != - ]]; then
+  codesign --sign "$ID" --timestamp "$OUT"
+  "$ROOT/scripts/notarize.sh" "$OUT"
+fi
 ( cd "${OUT:h}" && shasum -a 256 "${OUT:t}" > "${OUT:t}.sha256" )
 print "app $(du -sh "$PKG/dmg/Freequay.app" | cut -f1), disk image $(du -h "$OUT" | cut -f1)"
 cat "$OUT.sha256"
