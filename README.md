@@ -160,7 +160,14 @@ scripts/compat/update.sh      # rules from the open sources, optional: compat/ h
 
 D3DMetal: the app leads to Apple's download and installs it. Without the app, download "Evaluation environment for Windows games" from developer.apple.com, mount it and run `scripts/install-d3dmetal.sh "/Volumes/<volume>"`. It installs D3DMetal 4 as `d3dmetal` and version 3 as `d3dmetal3` into `~/Library/Application Support/freequay/backends`, where it stays when Freequay is updated.
 
-`scripts/build-app.sh` builds `Freequay.app` into the root of the repository with swiftc from Xcode or the Command Line Tools, and the helpers in `scripts/compat`: `applegamingwiki`, `fix` and `cabextract`. `scripts/package.sh 0.4.0` builds them as well, puts the build with the launcher, the rules and the license texts into `Freequay.app/Contents/SharedSupport/freequay`, signs the app with `scripts/sign.sh` and packs it into `out/Freequay-0.4.1.dmg`, the release disk image. `sign.sh` signs every Mach-O file with the hardened runtime and the entitlements Wine needs (`app/Freequay.entitlements`); without an identity the signature is ad hoc, with a Developer ID (Apple's developer program) the same call signs for notarization, which then only needs `xcrun notarytool` and `xcrun stapler`.
+`scripts/build-app.sh` builds `Freequay.app` into the root of the repository with swiftc from Xcode or the Command Line Tools, and the helpers in `scripts/compat`: `applegamingwiki`, `fix` and `cabextract`. `scripts/package.sh 0.5.0` builds them as well, puts the build with the launcher, the rules and the license texts into `Freequay.app/Contents/SharedSupport/freequay`, signs the app with `scripts/sign.sh` and packs it into `out/Freequay-0.5.0.dmg`, the release disk image. `sign.sh` signs every Mach-O file with the hardened runtime, Apple's timestamp and the entitlements Wine needs (`app/Freequay.entitlements`).
+
+With a Developer ID from Apple's developer program, `package.sh` also has Apple notarize the app, so macOS opens a downloaded Freequay without Open Anyway. Two steps, once on the Mac that builds:
+
+1. In Xcode, Settings, Accounts, add the program's Apple Account, then Manage Certificates, +, Developer ID Application. The certificate and its private key go into the login keychain.
+2. Create an app-specific password for that Apple Account on account.apple.com and hand it to notarytool, which keeps it in the keychain: `xcrun notarytool store-credentials freequay --apple-id <Apple Account> --team-id <team ID>`. The team ID is the code in brackets after the certificate's name in `security find-identity -v -p codesigning`.
+
+`package.sh` then signs with that certificate, sends the app to Apple's notary service with `scripts/notarize.sh` and staples the ticket to it, so the app opens offline as well, then signs the disk image and has it notarized too. Without the certificate, or with `scripts/package.sh 0.5.0 -`, the app is signed ad hoc and not notarized, and macOS opens it only after Open Anyway. For a notarized app, `spctl -a -vv /Applications/Freequay.app` says `source=Notarized Developer ID`.
 
 ## Patches
 
