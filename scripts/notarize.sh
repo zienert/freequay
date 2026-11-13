@@ -2,9 +2,11 @@
 # Has Apple's notary service check Freequay.app or its disk image and staples the ticket to it, so that
 # macOS opens a download without Open Anyway, offline as well. The app and the image must be signed with
 # a Developer ID (scripts/sign.sh, codesign). notarytool finds its login in the keychain under the
-# profile "freequay", or the one FREEQUAY_NOTARY_PROFILE names; store it once with
+# profile "freequay", or the one FREEQUAY_NOTARY_PROFILE names; store it once with an App Store Connect
+# API key (team key, Developer role)
+#   xcrun notarytool store-credentials freequay --key AuthKey_<key ID>.p8 --key-id <key ID> --issuer <issuer ID>
+# or with an app-specific password of the Apple Account (account.apple.com), which this asks for
 #   xcrun notarytool store-credentials freequay --apple-id <Apple Account> --team-id <team ID>
-# which asks for an app-specific password of that Apple Account (account.apple.com).
 # Usage: notarize.sh <Freequay.app|Freequay-<version>.dmg>
 set -euo pipefail
 
