@@ -15,7 +15,7 @@ set -euo pipefail
 
 ROOT=${0:A:h:h}
 VERSION=${1:?version missing, for example 0.3.0}
-ID=${2:-$(security find-identity -v -p codesigning | awk '/"Developer ID Application: /{print $2; exit}')}
+ID=${2:-$(security find-identity -v -p codesigning | awk '/"Developer ID Application: / && !n++ {print $2}')}  # to the end, see sign.sh
 if [[ -z $ID ]]; then
   print -u2 "no Developer ID Application certificate in the keychain, signing ad hoc without notarization"
   ID=-

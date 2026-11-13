@@ -9,7 +9,8 @@ set -euo pipefail
 
 ROOT=${0:A:h:h}
 APP=${${1:?path to Freequay.app missing}:A}
-ID=${2:-$(security find-identity -v -p codesigning | awk '/"Developer ID Application: /{print $2; exit}')}
+# awk reads to the end: one that quits early kills the writer with SIGPIPE, which pipefail counts
+ID=${2:-$(security find-identity -v -p codesigning | awk '/"Developer ID Application: / && !n++ {print $2}')}
 if [[ -z $ID ]]; then
   print -u2 "no Developer ID Application certificate in the keychain, signing ad hoc"
   ID=-
@@ -33,5 +34,5 @@ for f in ${(On)macho}; do
 done
 codesign $opts "$APP"
 codesign --verify --deep --strict "$APP"
-who=$(codesign -dvv "$APP" 2>&1 | awk -F= '/^Authority=/{print $2; exit}')
+who=$(codesign -dvv "$APP" 2>&1 | awk -F= '/^Authority=/ && !n++ {print $2}')
 print "signed ${#macho} files and ${APP:t} (${who:-ad hoc})"
